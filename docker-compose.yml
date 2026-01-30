@@ -1,0 +1,82 @@
+version: "3.8"
+
+services:
+  fiscalia-frontend:
+    build: ./fiscalia/frontend
+    container_name: fiscalia-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - frontend-network
+    depends_on:
+      - fiscalia-backend
+
+  fiscalia-backend:
+    build: ./fiscalia/backend
+    container_name: fiscalia-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - TRIBUNAL_URL=http://tribunal-backend:4001
+    networks:
+      - frontend-network
+      - backend-network
+    depends_on:
+      - tribunal-backend
+
+  tribunal-frontend:
+    build: ./tribunal/frontend
+    container_name: tribunal-frontend
+    ports:
+      - "4000:80"
+    networks:
+      - frontend-network
+    depends_on:
+      - tribunal-backend
+
+  tribunal-backend:
+    build: ./tribunal/backend
+    container_name: tribunal-backend
+    ports:
+      - "4001:4001"
+    environment:
+      - DATABASE_URL=postgresql://admin:secreto123@tribunal-db:5432/judicial_db
+      - KEYS_DIR=/app/keys
+    volumes:
+      - tribunal_keys:/app/keys
+    networks:
+      - frontend-network
+      - backend-network
+      - database-network
+    depends_on:
+      tribunal-db:
+        condition: service_healthy
+
+  tribunal-db:
+    image: postgres:16-alpine
+    container_name: tribunal-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: secreto123
+      POSTGRES_DB: judicial_db
+    volumes:
+      - tribunal_data:/var/lib/postgresql/data
+    networks:
+      - database-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d judicial_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+  database-network:
+    driver: bridge
+
+volumes:
+  tribunal_data:
+  tribunal_keys:

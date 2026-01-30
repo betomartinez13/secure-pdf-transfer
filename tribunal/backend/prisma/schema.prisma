@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Case {
+  id           Int      @id @default(autoincrement())
+  caseName     String
+  fileName     String
+  fileData     Bytes
+  hash         String
+  hashVerified Boolean
+  receivedAt   DateTime @default(now())
+}
