@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.pem
+.env
+
+# Internal planning docs (not part of deliverable)
+docs/
+plan.md
