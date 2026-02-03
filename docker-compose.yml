@@ -55,8 +55,7 @@ services:
   tribunal-db:
     image: postgres:16-alpine
     container_name: tribunal-db
-    ports:
-      - "5432:5432"
+    # No port exposed - DB only accessible via database-network (security)
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: secreto123
