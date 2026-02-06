@@ -7,7 +7,6 @@ interface Case {
   caseName: string;
   fileName: string;
   receivedAt: string;
-  hashVerified: boolean;
 }
 
 const API_BASE_URL = 'http://localhost:4001';
@@ -42,6 +41,16 @@ function App() {
         responseType: 'blob',
       });
 
+      const hashVerified = response.headers['x-hash-verified'] === 'true';
+
+      if (!hashVerified) {
+        const proceed = window.confirm(
+          '⚠️ Advertencia: La verificación de integridad del archivo falló.\n\n' +
+          'El archivo puede haber sido modificado. ¿Desea continuar con la descarga?'
+        );
+        if (!proceed) return;
+      }
+
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -51,6 +60,10 @@ function App() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+
+      if (hashVerified) {
+        alert('✅ Archivo descargado correctamente.\n\nIntegridad verificada: El hash SHA-256 coincide.');
+      }
     } catch (err) {
       console.error('Error downloading file:', err);
       alert('Error al descargar el archivo. Por favor intente nuevamente.');
@@ -109,7 +122,7 @@ function App() {
                   <th>Nombre del Caso</th>
                   <th>Archivo</th>
                   <th>Fecha de Recepción</th>
-                  <th>Integridad (Hash)</th>
+                  <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -121,11 +134,7 @@ function App() {
                     <td className="file-name-cell">{caseItem.fileName}</td>
                     <td className="date-cell">{formatDate(caseItem.receivedAt)}</td>
                     <td className="verification-cell">
-                      {caseItem.hashVerified ? (
-                        <span className="verified" title="Verificado Correctamente">✅</span>
-                      ) : (
-                        <span className="not-verified" title="Error de Integridad">❌</span>
-                      )}
+                      <span className="encrypted" title="Archivo encriptado - Se verificará al descargar">🔒</span>
                     </td>
                     <td className="actions-cell">
                       <button
