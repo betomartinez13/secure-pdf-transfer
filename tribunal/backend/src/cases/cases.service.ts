@@ -8,14 +8,21 @@ export class CasesService {
   async create(data: {
     caseName: string;
     fileName: string;
-    fileData: Buffer;
+    encryptedFile: string;
+    encryptedKey: string;
+    iv: string;
+    authTag: string;
     hash: string;
-    hashVerified: boolean;
   }) {
     return this.prisma.case.create({
       data: {
-        ...data,
-        fileData: Uint8Array.from(data.fileData),
+        caseName: data.caseName,
+        fileName: data.fileName,
+        encryptedFile: Buffer.from(data.encryptedFile, 'base64'),
+        encryptedKey: data.encryptedKey,
+        iv: data.iv,
+        authTag: data.authTag,
+        hash: data.hash,
       },
     });
   }
@@ -27,7 +34,6 @@ export class CasesService {
         caseName: true,
         fileName: true,
         hash: true,
-        hashVerified: true,
         receivedAt: true,
       },
       orderBy: { receivedAt: 'desc' },

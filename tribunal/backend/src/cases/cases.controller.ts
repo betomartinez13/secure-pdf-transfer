@@ -23,19 +23,20 @@ export class CasesController {
     hash: string;
   }) {
     this.logger.log(`Receiving encrypted case: ${body.caseName}`);
-
-    const { decryptedFile, hashVerified } = this.cryptoService.verifyAndDecrypt(body);
+    this.logger.log('Storing case encrypted in database (on-demand decryption enabled)');
 
     const saved = await this.casesService.create({
       caseName: body.caseName,
       fileName: body.fileName,
-      fileData: decryptedFile,
+      encryptedFile: body.encryptedFile,
+      encryptedKey: body.encryptedKey,
+      iv: body.iv,
+      authTag: body.authTag,
       hash: body.hash,
-      hashVerified,
     });
 
-    this.logger.log(`Case stored with id=${saved.id}, hashVerified=${hashVerified}`);
-    return { success: true, id: saved.id, hashVerified };
+    this.logger.log(`Case stored encrypted with id=${saved.id}`);
+    return { success: true, id: saved.id };
   }
 
   @Get()
@@ -46,10 +47,28 @@ export class CasesController {
   @Get(':id/download')
   async downloadCase(@Param('id') id: string, @Res() res: Response) {
     const caseRecord = await this.casesService.findOne(parseInt(id, 10));
+
+    this.logger.log(`On-demand decryption requested for case id=${id}`);
+
+    const { decryptedFile, hashVerified } = this.cryptoService.verifyAndDecrypt({
+      encryptedFile: Buffer.from(caseRecord.encryptedFile).toString('base64'),
+      encryptedKey: caseRecord.encryptedKey,
+      iv: caseRecord.iv,
+      authTag: caseRecord.authTag,
+      hash: caseRecord.hash,
+    });
+
+    if (!hashVerified) {
+      this.logger.warn(`Hash verification failed for case id=${id}`);
+    }
+
+    this.logger.log(`Case id=${id} decrypted successfully, sending to client`);
+
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${caseRecord.fileName}"`,
+      'X-Hash-Verified': hashVerified.toString(),
     });
-    res.send(caseRecord.fileData);
+    res.send(decryptedFile);
   }
 }

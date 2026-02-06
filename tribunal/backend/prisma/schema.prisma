@@ -8,11 +8,13 @@ generator client {
 }
 
 model Case {
-  id           Int      @id @default(autoincrement())
-  caseName     String
-  fileName     String
-  fileData     Bytes
-  hash         String
-  hashVerified Boolean
-  receivedAt   DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  caseName      String
+  fileName      String
+  encryptedFile Bytes
+  encryptedKey  String
+  iv            String
+  authTag       String
+  hash          String
+  receivedAt    DateTime @default(now())
 }
