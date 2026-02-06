@@ -30,7 +30,8 @@ export class CasesService {
       success: true,
       message: `Case "${caseName}" sent successfully.`,
       hash: payload.hash,
-      hashVerified: result.hashVerified,
+      caseId: result.id,
+      storedEncrypted: true,
     };
   }
 }

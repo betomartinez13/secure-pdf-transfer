@@ -10,7 +10,8 @@ interface SuccessResponse {
   success: boolean;
   message: string;
   hash: string;
-  hashVerified: boolean;
+  caseId: number;
+  storedEncrypted: boolean;
 }
 
 interface FormState {
@@ -218,13 +219,23 @@ function App() {
               <p className="panel-message">{successData.message}</p>
               <div className="panel-details">
                 <div className="detail-row">
+                  <span className="detail-label">Case ID:</span>
+                  <code className="detail-value">{successData.caseId}</code>
+                </div>
+                <div className="detail-row">
                   <span className="detail-label">SHA-256 Hash:</span>
                   <code className="detail-value hash-value">{successData.hash}</code>
                 </div>
                 <div className="detail-row">
-                  <span className="detail-label">Hash Verified:</span>
-                  <span className={`verification-badge ${successData.hashVerified ? 'verified' : 'not-verified'}`}>
-                    {successData.hashVerified ? 'Verified' : 'Not Verified'}
+                  <span className="detail-label">Storage:</span>
+                  <span className="verification-badge verified">
+                    Encrypted
+                  </span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Integrity:</span>
+                  <span className="verification-badge pending">
+                    Verified on download
                   </span>
                 </div>
               </div>
