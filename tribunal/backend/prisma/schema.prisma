@@ -18,3 +18,14 @@ model Case {
   hash          String
   receivedAt    DateTime @default(now())
 }
+
+model AuthorizedKey {
+  id         Int      @id @default(autoincrement())
+  keyId      String   @unique
+  publicKey  String   @db.Text
+  deviceName String
+  ownerEmail String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

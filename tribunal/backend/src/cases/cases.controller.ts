@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Param, Body, Res, Logger } from '@nestjs/common';
 import { Response } from 'express';
 import { CasesService } from './cases.service';
-import { CryptoService } from '../crypto/crypto.service';
+import { CryptoService, EncryptedKeyEntry } from '../crypto/crypto.service';
 
 @Controller('cases')
 export class CasesController {
@@ -17,19 +17,31 @@ export class CasesController {
     caseName: string;
     fileName: string;
     encryptedFile: string;
-    encryptedKey: string;
+    encryptedKey?: string;              // Legacy: single recipient
+    encryptedKeys?: EncryptedKeyEntry[]; // Multi-recipient
     iv: string;
     authTag: string;
     hash: string;
   }) {
     this.logger.log(`Receiving encrypted case: ${body.caseName}`);
+
+    if (body.encryptedKeys) {
+      this.logger.log(`Multi-recipient payload with ${body.encryptedKeys.length} authorized keys`);
+    }
+
     this.logger.log('Storing case encrypted in database (on-demand decryption enabled)');
+
+    // Para multi-recipient, almacenamos encryptedKeys como JSON string
+    // Para legacy, usamos encryptedKey directamente
+    const encryptedKeyToStore = body.encryptedKeys
+      ? JSON.stringify(body.encryptedKeys)
+      : body.encryptedKey;
 
     const saved = await this.casesService.create({
       caseName: body.caseName,
       fileName: body.fileName,
       encryptedFile: body.encryptedFile,
-      encryptedKey: body.encryptedKey,
+      encryptedKey: encryptedKeyToStore,
       iv: body.iv,
       authTag: body.authTag,
       hash: body.hash,
@@ -50,9 +62,27 @@ export class CasesController {
 
     this.logger.log(`On-demand decryption requested for case id=${id}`);
 
+    // Detectar si es multi-recipient (JSON array) o legacy (base64 string)
+    let encryptedKey: string | undefined;
+    let encryptedKeys: EncryptedKeyEntry[] | undefined;
+
+    try {
+      const parsed = JSON.parse(caseRecord.encryptedKey);
+      if (Array.isArray(parsed)) {
+        encryptedKeys = parsed;
+        this.logger.log(`Multi-recipient case detected with ${encryptedKeys.length} keys`);
+      } else {
+        encryptedKey = caseRecord.encryptedKey;
+      }
+    } catch {
+      // No es JSON, es legacy base64 string
+      encryptedKey = caseRecord.encryptedKey;
+    }
+
     const { decryptedFile, hashVerified } = this.cryptoService.verifyAndDecrypt({
       encryptedFile: Buffer.from(caseRecord.encryptedFile).toString('base64'),
-      encryptedKey: caseRecord.encryptedKey,
+      encryptedKey,
+      encryptedKeys,
       iv: caseRecord.iv,
       authTag: caseRecord.authTag,
       hash: caseRecord.hash,

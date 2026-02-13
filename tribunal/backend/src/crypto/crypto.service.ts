@@ -3,11 +3,17 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
+export interface EncryptedKeyEntry {
+  keyId: string;
+  encryptedKey: string;
+}
+
 @Injectable()
 export class CryptoService implements OnModuleInit {
   private readonly logger = new Logger(CryptoService.name);
   private privateKey: string;
   private publicKey: string;
+  private myKeyId: string;
 
   private readonly keysDir = process.env.KEYS_DIR || '/app/keys';
   private readonly privatePath = path.join(this.keysDir, 'tribunal_private.pem');
@@ -33,6 +39,25 @@ export class CryptoService implements OnModuleInit {
       fs.writeFileSync(this.publicPath, publicKey);
       this.logger.log('RSA key pair generated and saved.');
     }
+
+    // Calcular keyId de esta instancia
+    this.myKeyId = this.computeKeyId(this.publicKey);
+    this.logger.log(`My keyId: ${this.myKeyId}`);
+  }
+
+  /**
+   * Calcula el keyId a partir de una clave pública (SHA-256 truncado a 16 caracteres hex)
+   */
+  computeKeyId(publicKeyPem: string): string {
+    const hash = crypto.createHash('sha256').update(publicKeyPem).digest('hex');
+    return hash.substring(0, 16);
+  }
+
+  /**
+   * Retorna el keyId de esta instancia
+   */
+  getMyKeyId(): string {
+    return this.myKeyId;
   }
 
   getPublicKey(): string {
@@ -59,20 +84,50 @@ export class CryptoService implements OnModuleInit {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
+  /**
+   * Descifra un payload - soporta tanto formato legacy (encryptedKey) como multi-recipient (encryptedKeys)
+   */
   verifyAndDecrypt(payload: {
     encryptedFile: string;
-    encryptedKey: string;
+    encryptedKey?: string;
+    encryptedKeys?: EncryptedKeyEntry[];
     iv: string;
     authTag: string;
     hash: string;
   }): { decryptedFile: Buffer; hashVerified: boolean } {
     const encryptedFile = Buffer.from(payload.encryptedFile, 'base64');
-    const encryptedKey = Buffer.from(payload.encryptedKey, 'base64');
     const iv = Buffer.from(payload.iv, 'hex');
     const authTag = Buffer.from(payload.authTag, 'hex');
 
+    let encryptedKeyBuffer: Buffer;
+
+    // Soporte multi-recipient: buscar nuestra clave en el array
+    if (payload.encryptedKeys && Array.isArray(payload.encryptedKeys)) {
+      this.logger.log(`Multi-recipient payload detected with ${payload.encryptedKeys.length} keys`);
+      const myEntry = payload.encryptedKeys.find(entry => entry.keyId === this.myKeyId);
+
+      if (!myEntry) {
+        const availableKeyIds = payload.encryptedKeys.map(e => e.keyId).join(', ');
+        throw new Error(
+          `This device (keyId: ${this.myKeyId}) is not authorized to decrypt this file. ` +
+          `Available keyIds: ${availableKeyIds}`
+        );
+      }
+
+      this.logger.log(`Found matching key entry for keyId: ${this.myKeyId}`);
+      encryptedKeyBuffer = Buffer.from(myEntry.encryptedKey, 'base64');
+    }
+    // Soporte legacy: usar encryptedKey directamente
+    else if (payload.encryptedKey) {
+      this.logger.log('Legacy single-recipient payload detected');
+      encryptedKeyBuffer = Buffer.from(payload.encryptedKey, 'base64');
+    }
+    else {
+      throw new Error('No encrypted key found in payload (expected encryptedKey or encryptedKeys)');
+    }
+
     this.logger.log('Decrypting AES key with RSA private key...');
-    const aesKey = this.decryptRSA(encryptedKey);
+    const aesKey = this.decryptRSA(encryptedKeyBuffer);
 
     this.logger.log('Decrypting file with AES-256-GCM...');
     const decryptedFile = this.decryptAES(encryptedFile, aesKey, iv, authTag);

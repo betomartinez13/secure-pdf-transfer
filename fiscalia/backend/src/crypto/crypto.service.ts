@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 
+export interface Recipient {
+  keyId: string;
+  publicKey: string;
+}
+
+export interface EncryptedKeyEntry {
+  keyId: string;
+  encryptedKey: string;
+}
+
 @Injectable()
 export class CryptoService {
   private readonly logger = new Logger(CryptoService.name);
@@ -30,7 +40,49 @@ export class CryptoService {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
 
-  createSecurePayload(fileBuffer: Buffer, publicKeyPem: string) {
+  /**
+   * Crea payload seguro para múltiples destinatarios
+   * @param fileBuffer - Buffer del archivo a cifrar
+   * @param recipients - Array de destinatarios con keyId y publicKey
+   */
+  createSecurePayload(fileBuffer: Buffer, recipients: Recipient[]) {
+    if (recipients.length === 0) {
+      throw new Error('At least one recipient is required');
+    }
+
+    this.logger.log('Computing SHA-256 hash...');
+    const fileHash = this.hash(fileBuffer);
+
+    this.logger.log('Generating AES-256 key + IV...');
+    const { key, iv } = this.generateAESKey();
+
+    this.logger.log('Encrypting with AES-256-GCM...');
+    const { encrypted, authTag } = this.encryptAES(fileBuffer, key, iv);
+
+    this.logger.log(`Encrypting AES key for ${recipients.length} recipient(s)...`);
+    const encryptedKeys: EncryptedKeyEntry[] = recipients.map(recipient => {
+      const encryptedKey = this.encryptRSA(key, recipient.publicKey);
+      this.logger.log(`  - Encrypted for keyId: ${recipient.keyId}`);
+      return {
+        keyId: recipient.keyId,
+        encryptedKey: encryptedKey.toString('base64'),
+      };
+    });
+
+    return {
+      encryptedFile: encrypted.toString('base64'),
+      encryptedKeys,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      hash: fileHash,
+    };
+  }
+
+  /**
+   * @deprecated Use createSecurePayload with recipients array instead
+   * Mantiene compatibilidad con código legacy
+   */
+  createSecurePayloadLegacy(fileBuffer: Buffer, publicKeyPem: string) {
     this.logger.log('Computing SHA-256 hash...');
     const fileHash = this.hash(fileBuffer);
 
